@@ -11,11 +11,12 @@
 #include <errno.h>      // for perror
 #include <string.h>     // for strcspn
 
+// Define constants
 #define MAX_FILES 100  // Max number of executables we expect
 #define MAX_FILENAME_LEN 100  // Max length of each file name
 #define OUT_FILE "autograder.out"
 
-// Comparator function for sorting sol names
+// Comparator function for sorting solution names in alphabetical order
 int compare_filenames(const void *a, const void *b) {
     return strcmp(*(const char **)a, *(const char **)b);
 }
@@ -23,30 +24,30 @@ int compare_filenames(const void *a, const void *b) {
 int main(int argc, char *argv[]) {
 
     // Initialize variables
-    FILE *file;
-    FILE *out_file;
+    FILE *file; // Input file for solutions
+    FILE *out_file; // Output file for generated solutions
     char *filenames[MAX_FILES];  // Array of strings to hold executable file names
     char buffer[MAX_FILENAME_LEN];  // Temporary buffer to hold each line (file name)
-    pid_t pid;
-    int status;
+    pid_t pid; // Child process
+    int status; // Current exit status of child
     int total_executables = 0;
-    int finished = 0;
+    int finished = 0; // Number of executed processes with a given parameter
 
-    // Open the output file to write the status
+    // Open the output file and error check
     out_file = fopen(OUT_FILE, "w");
     if (out_file == NULL) {
         perror("Error opening autograder.out");
         return 1;
     }
 
-    // Arg count
+    // Improper input check and syntax printing for execution
     if (argc < 2) {
         printf("Usage: %s <batch> <p1> <p2> ... <pn>\n", argv[0]);
         fclose(out_file);
         return 1;
     }
 
-    // Convert the first command-line argument to an integer to determine the batch size
+    // Convert the first argument to an integer to get the batch size
     int batch_size = atoi(argv[1]);
     if (batch_size <= 0) {
         printf("Invalid batch size\n");
@@ -61,10 +62,10 @@ int main(int argc, char *argv[]) {
         parameters[i] = argv[i + 2];  // parameter i corresponds to argv[i+2]
     }
 
-    // write the file paths from the "solutions" directory into the submissions.txt file
+    // Write the file paths from the "solutions" directory into the submissions.txt file
     write_filepath_to_submissions("solutions", "submissions.txt");
 
-    // Open submissions.txt in read mode
+    // Open submissions.txt in read mode and error check
     file = fopen("submissions.txt", "r");
     if (file == NULL) {
         perror("Error: Could not open submissions.txt");
@@ -76,10 +77,11 @@ int main(int argc, char *argv[]) {
     while (fgets(buffer, sizeof(buffer), file)) {
         buffer[strcspn(buffer, "\n")] = '\0';
 
-        // Allocate memory for each file name and store it in the array
+        // Allocate memory and store it in the array
         filenames[total_executables] = malloc(strlen(buffer) + 1);
         strcpy(filenames[total_executables], buffer);
 
+        // Increment the total count and error check
         total_executables += 1;
         if (total_executables >= MAX_FILES) {
             printf("Too many files, increase MAX_FILES\n");
@@ -91,11 +93,8 @@ int main(int argc, char *argv[]) {
     // Sort the filenames array alphabetically
     qsort(filenames, total_executables, sizeof(char *), compare_filenames);
 
-    //printf("After sorting the executable names\n");
-
     // For each parameter, run all executables in batch size chunks
     for (int i = 0; i < number_of_parameters; i++) {
-        //printf("In for loop for parameter: %s\n", parameters[i]);
 
         // Reset processed_executables for each parameter
         int processed_executables = 0;
@@ -105,16 +104,16 @@ int main(int argc, char *argv[]) {
 
             // Loop for B times to batch the executions
             for (int j = 0; j < batch_size && processed_executables < total_executables; j++) {
-                char *filename = filenames[processed_executables];  // Get the filename from the sorted array
 
-                //printf("Processing executable: %s with parameter: %s\n", filename, parameters[i]);
+                // Get the filename from the sorted array
+                char *filename = filenames[processed_executables];
 
-                // Fork and exec
+                // Begin creating child processes and call them on the filename generated
                 pid = fork();
+
+                // Child process
                 if (pid == 0) {
-                    // Child process
                     char *exec_args[] = {filename, parameters[i], NULL};
-                    //printf("Execv args: %s %s\n", filename, parameters[i]);
                     if (execv(filename, exec_args) == -1) {
                         perror("Error during exec");
                         exit(1);
@@ -153,7 +152,6 @@ int main(int argc, char *argv[]) {
         free(filenames[i]);
     }
 
-    // Close the output file
     fclose(out_file);
     return 0;
 }
